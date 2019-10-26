@@ -18,8 +18,6 @@
 #include <stdbool.h>
 #include "EEPROM_util.h"
 
-
-
 typedef enum pedal_state_t{
     INIT,
     DRIVING,
@@ -47,6 +45,7 @@ volatile pedal_state_t pedal_state = INIT;
 uint8_t DIFF_FAULT_BIT=0x00;
 volatile uint8_t calibration_done_flag=false;
 volatile uint8_t force_stop = false;
+volatile uint8_t stop_by_BSPD = false;
 
 void update_ADC_SAR();
 
@@ -58,7 +57,7 @@ CY_ISR(isr_CAN_Handler){
     }
     int16 temp_throttle = 0;
     int16 temp_brake = 0;
-    int brake_range = brakeMax-brakeMin;
+    //int brake_range = brakeMax-brakeMin;
     int throttle_range = throttle1Max-throttle1Min;
     
     //send PDO1 (throttle)
@@ -90,7 +89,8 @@ CY_ISR(isr_CAN_Handler){
      
     // check for soft BSPD
     if(temp_brake > 0 && temp_throttle > throttle_range * 0.25) {
-        force_stop = true;
+        stop_by_BSPD = true; //variable that marks if the BSPD has triggered, type = uint8_t
+        force_stop = true; 
         temp_throttle = 0;
     }
     
@@ -129,16 +129,16 @@ CY_ISR(isr_CAN_Handler){
     can_buffer[5]= (uint8)(per_throttle2) & 0xff;
     can_buffer[6]= 0x00;
     can_buffer[7]= 0x00;
-    CAN_SendMsgPDO1();
+    CAN_SendMsgPDO1(); 
     
     //send PDO2 (brake)
     can_buffer[0]= (temp_brake>10 ? 0x01:0x00);     // must slam brake to enter drive
     can_buffer[1]= (uint16)(temp_brake)>>8 & 0xff;
     can_buffer[2]= (uint16)(temp_brake) & 0xff;
     can_buffer[3]= 0x00;
-    can_buffer[4]= 0x00;
+    can_buffer[4]= (uint8)(stop_by_BSPD) & 0xff;
     can_buffer[5]= 0x00;
-    can_buffer[6]= (uint16)(brake1)>>8 &0xff;
+    can_buffer[6]= (uint16)(brake1)>>8 & 0xff;
     can_buffer[7]= (uint16)(brake1) & 0xff;
     CAN_SendMsgPDO2();
     
